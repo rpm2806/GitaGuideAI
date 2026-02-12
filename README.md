@@ -1,4 +1,4 @@
-# 🕉️ GitaGuide AI - Your Spiritual Companion
+# 🕉️ GitaGuide AI - An AI-Powered Personal Teacher Inspired by the Bhagavad Gita
 
 ![GitaGuide AI Banner](https://img.shields.io/badge/GitaGuide-AI-orange?style=for-the-badge&logo=meditation)
 ![Next.js](https://img.shields.io/badge/Next.js-15.1-black?style=flat-square&logo=next.js)
@@ -14,7 +14,7 @@
 ## 🚀 Live Demo
 
 - **Frontend (Chat Interface):** [https://gita-guide-ai.vercel.app](https://gita-guide-ai.vercel.app)
-- **Backend (API):** [https://gitaguideai.onrender.com](https://gitaguideai.onrender.com) (Swagger UI at `/docs`)
+- **Backend (API):** [https://gitaguideai.onrender.com](https://gitaguideai.onrender.com) 
 
 ---
 
@@ -25,7 +25,6 @@
 - **Mood-Based Responses:** Tailors the tone of the guidance based on your current emotional state (e.g., Sad, Anxious, Angry, Seeking Purpose).
 - **Sacred Verses Integration:** Every response includes the specific Sanskrit shlokas, transliterations, and translations that inspired the advice.
 - **"Spiritually Modern" UI:** A beautiful, responsive interface featuring glassmorphism, smooth animations, and a day/night mode (Sun/Moon themes).
-- **Audio/Voice Friendly:** (Coming Soon) planned integration for voice input and text-to-speech.
 
 ---
 
