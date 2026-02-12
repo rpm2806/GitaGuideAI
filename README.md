@@ -154,8 +154,9 @@ Health check endpoint for monitoring uptime.
 
 ---
 
-## � Credits & Acknowledgements
+## 🙏 Credits & Acknowledgements
 
+- **Rupam:** Creator & Developer of GitaGuide AI.
 - **Prophet of AI:** For the inspiration to build agentic AI applications.
 - **Bhagavad Gita:** The timeless source of wisdom.
 - **Open Source Community:** For the amazing tools and libraries.
