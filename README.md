@@ -14,7 +14,7 @@
 ## 🚀 Live Demo
 
 - **Frontend (Chat Interface):** [https://gita-guide-ai.vercel.app](https://gita-guide-ai.vercel.app)
-- **Backend (API):** [https://gitaguideai-backend.onrender.com](https://gitaguideai.onrender.com) (Swagger UI at `/docs`)
+- **Backend (API):** [https://gitaguideai.onrender.com](https://gitaguideai.onrender.com) (Swagger UI at `/docs`)
 
 ---
 
