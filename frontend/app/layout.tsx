@@ -11,7 +11,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "GitaGuide AI",
-  description: "Your spiritual companion for wisdom from the Bhagavad Gita.",
+  description: "Your spiritual companion for wisdom from the Bhagavad Gita. (Deployed)",
 };
 
 export default function RootLayout({
