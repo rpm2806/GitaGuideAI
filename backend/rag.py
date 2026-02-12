@@ -1,35 +1,47 @@
 import os
 import json
 import logging
+import asyncio
 import numpy as np
-from sentence_transformers import SentenceTransformer
 from starlette.concurrency import run_in_threadpool
+import httpx
 
 logger = logging.getLogger(__name__)
 
 class RAGPipeline:
     def __init__(self):
-        self.model = None
         self.documents = []
         self.metadatas = []
         self.embeddings = None
         self.model_name = os.getenv("EMBEDDING_MODEL_NAME", "BAAI/bge-small-en-v1.5")
+        self.hf_token = os.getenv("HF_TOKEN")
+        self.api_url = f"https://api-inference.huggingface.co/pipeline/feature-extraction/{self.model_name}"
         
-        # Initialize components
-        self._load_model()
+        if not self.hf_token:
+            logger.warning("HF_TOKEN is not set. Inference API calls will be rate-limited or fail.")
 
-    def _load_model(self):
-        try:
-            logger.info(f"Loading embedding model: {self.model_name}")
-            # Use CPU for Render free tier compliance
-            self.model = SentenceTransformer(self.model_name, device="cpu")
-            logger.info("Model loaded successfully")
-        except Exception as e:
-            logger.error(f"Failed to load embedding model: {e}")
-            raise
+    async def _get_embeddings(self, texts: list) -> np.ndarray:
+        """Fetches embeddings from Hugging Face Inference API."""
+        if not self.hf_token:
+            raise ValueError("HF_TOKEN is required for Inference API.")
 
-    def ingest_data(self, json_path: str):
-        """Loads data from JSON and computes embeddings in-memory."""
+        headers = {"Authorization": f"Bearer {self.hf_token}"}
+        
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                self.api_url,
+                headers=headers,
+                json={"inputs": texts, "options": {"wait_for_model": True}}
+            )
+            
+            if response.status_code != 200:
+                logger.error(f"HF Inference API Error: {response.text}")
+                raise Exception(f"HF API Error: {response.status_code}")
+                
+            return np.array(response.json())
+
+    async def ingest_data(self, json_path: str):
+        """Loads data from JSON and fetches embeddings from HF Inference API."""
         if not os.path.exists(json_path):
             logger.warning(f"Data file not found at {json_path}. Skipping ingestion.")
             return
@@ -38,7 +50,7 @@ class RAGPipeline:
             with open(json_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             
-            logger.info(f"Ingesting {len(data)} verses...")
+            logger.info(f"Ingesting {len(data)} verses via HF Inference API...")
             
             self.documents = [f"{item['translation']} (Chapter {item['chapter']}, Verse {item['verse']})" for item in data]
             self.metadatas = [{
@@ -50,11 +62,20 @@ class RAGPipeline:
                 "source": item.get('source_ref', 'unknown')
             } for item in data]
             
-            # Compute embeddings
-            embeddings = self.model.encode(self.documents, normalize_embeddings=True)
-            self.embeddings = np.array(embeddings)
+            # Batch process embeddings (HF API has limits on payload size)
+            batch_size = 50
+            all_embeddings = []
             
-            logger.info("Ingestion complete.")
+            for i in range(0, len(self.documents), batch_size):
+                batch = self.documents[i:i + batch_size]
+                logger.info(f"Fetching embeddings for batch {i//batch_size + 1}...")
+                batch_embeddings = await self._get_embeddings(batch)
+                all_embeddings.append(batch_embeddings)
+                # Small sleep to be respectful of rate limits
+                await asyncio.sleep(0.5)
+            
+            self.embeddings = np.vstack(all_embeddings)
+            logger.info("Ingestion complete via HF Inference API.")
         except Exception as e:
             logger.error(f"Error during ingestion: {e}")
 
@@ -63,16 +84,17 @@ class RAGPipeline:
             if self.embeddings is None or len(self.embeddings) == 0:
                 return []
 
-            # Run blocking encoding in threadpool
-            query_embedding = await run_in_threadpool(self.model.encode, query, normalize_embeddings=True)
+            # Get query embedding
+            query_embedding = await self._get_embeddings([query])
+            query_embedding = query_embedding[0] # Take the first and only result
             
-            # Compute cosine similarity (dot product of normalized vectors)
+            # Compute cosine similarity
+            # Since vectors from this model are normalized, dot product is cosine similarity
             scores = np.dot(self.embeddings, query_embedding)
             
             # Get top-k indices
             top_k_indices = np.argsort(scores)[::-1][:limit]
             
-            # Formatting results
             hits = []
             for idx in top_k_indices:
                 hits.append({

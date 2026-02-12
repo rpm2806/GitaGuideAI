@@ -46,10 +46,9 @@ async def lifespan(app: FastAPI):
     safety = SafetyLayer()
     
     # Initialize RAG Pipeline
-    # This might take a moment to load the model
     rag = RAGPipeline()
     try:
-        rag.ingest_data("./data/gita.json")
+        await rag.ingest_data("./data/gita.json")
     except Exception as e:
         logger.error(f"Failed to ingest data: {e}")
     
