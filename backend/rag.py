@@ -15,7 +15,7 @@ class RAGPipeline:
         self.embeddings = None
         self.model_name = os.getenv("EMBEDDING_MODEL_NAME", "BAAI/bge-small-en-v1.5")
         self.hf_token = os.getenv("HF_TOKEN")
-        self.api_url = f"https://api-inference.huggingface.co/pipeline/feature-extraction/{self.model_name}"
+        self.api_url = f"https://router.huggingface.co/hf-inference/models/{self.model_name}"
         
         if not self.hf_token:
             logger.warning("HF_TOKEN is not set. Inference API calls will be rate-limited or fail.")
