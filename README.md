@@ -71,6 +71,7 @@ uvicorn main:app --reload
 - **Environment Variables**:
   - `GROQ_API_KEY`: Your key from info@groq.com.
   - `CORS_ORIGINS`: Initially `*`, then update to your Vercel URL later.
+  - `HF_TOKEN`: Your token from Hugging Face. **Important**: Ensure the token has the **"Inference"** permission enabled in your [Hugging Face Settings](https://huggingface.co/settings/tokens).
   - `PYTHON_VERSION`: `3.11.9`
 
 ### 3. Frontend Deployment (Vercel)
