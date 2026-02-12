@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { useState, useEffect, useRef } from "react";
@@ -85,10 +84,11 @@ export default function ChatInterface() {
                 id: (Date.now() + 1).toString(), role: "assistant",
                 content: data.response, verses: data.relevant_verses, showVerses: false, timestamp: getTime()
             }]);
-        } catch (err: any) {
+        } catch (err: unknown) {
+            const errorMessage = err instanceof Error ? err.message : "Unknown error";
             setMessages(p => [...p, {
                 id: Date.now().toString(), role: "assistant", timestamp: getTime(),
-                content: `I'm having difficulty right now. Please try again. (${err.message})`,
+                content: `I'm having difficulty right now. Please try again. (${errorMessage})`,
             }]);
         } finally { setIsLoading(false); inputRef.current?.focus(); }
     };
@@ -243,10 +243,10 @@ export default function ChatInterface() {
                                     ) : (
                                         <ReactMarkdown remarkPlugins={[remarkGfm]}
                                             components={{
-                                                p: ({ node, ...props }) => <p style={{ color: 'inherit', margin: '4px 0', lineHeight: 1.65 }} {...props} />,
-                                                strong: ({ node, ...props }) => <strong style={{ color: 'var(--orange)', fontWeight: 700 }} {...props} />,
-                                                em: ({ node, ...props }) => <em style={{ color: 'inherit', opacity: 0.8 }} {...props} />,
-                                                li: ({ node, ...props }) => <li style={{ color: 'inherit', marginLeft: 16 }} {...props} />,
+                                                p: ({ ...props }) => <p style={{ color: 'inherit', margin: '4px 0', lineHeight: 1.65 }} {...props} />,
+                                                strong: ({ ...props }) => <strong style={{ color: 'var(--orange)', fontWeight: 700 }} {...props} />,
+                                                em: ({ ...props }) => <em style={{ color: 'inherit', opacity: 0.8 }} {...props} />,
+                                                li: ({ ...props }) => <li style={{ color: 'inherit', marginLeft: 16 }} {...props} />,
                                             }}>
                                             {msg.content}
                                         </ReactMarkdown>
@@ -285,7 +285,7 @@ export default function ChatInterface() {
                                                         {v.shloka && <p style={{ fontSize: 15, fontStyle: 'italic', color: 'var(--text-dark)', marginBottom: 6, opacity: 0.85 }}>{v.shloka}</p>}
                                                         {v.transliteration && <p style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 6, fontStyle: 'italic' }}>{v.transliteration}</p>}
                                                         <p style={{ fontSize: 14, color: 'var(--text-medium)', fontStyle: 'italic', borderLeft: '3px solid var(--orange)', paddingLeft: 12 }}>
-                                                            "{v.text}"
+                                                            &quot;{v.text}&quot;
                                                         </p>
                                                     </div>
                                                 ))}
