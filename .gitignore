@@ -29,8 +29,6 @@ Thumbs.db
 
 # Project-specific
 Bhagwad_Gita.csv
-backend/data/gita.json
-frontend/public/particles.json
 
 # Tool artifacts
 brain/

@@ -62,12 +62,24 @@ uvicorn main:app --reload
 
 ### 3. Frontend Setup
 ```bash
-cd ../frontend
-npm install
-npm run dev
-```
+### 2. Backend Deployment (Render)
+- Go to [dashboard.render.com](https://dashboard.render.com/) and create a **New Web Service**.
+- **Root Directory**: `backend`
+- **Runtime**: `Python 3`
+- **Build Command**: `pip install -r requirements.txt`
+- **Start Command**: `python -m uvicorn main:app --host 0.0.0.0 --port $PORT`
+- **Environment Variables**:
+  - `GROQ_API_KEY`: Your key from info@groq.com.
+  - `CORS_ORIGINS`: Initially `*`, then update to your Vercel URL later.
+  - `PYTHON_VERSION`: `3.11.9`
 
-Open [http://localhost:3000](http://localhost:3000) to begin your journey.
+### 3. Frontend Deployment (Vercel)
+- Go to [vercel.com](https://vercel.com/) and create a **New Project**.
+- **Root Directory**: `frontend`
+- **Environment Variables**:
+  - `NEXT_PUBLIC_API_URL`: Your Render backend URL.
+
+Once both are deployed, update the `CORS_ORIGINS` in Render with your Vercel URL to secure the API.
 
 ---
 
