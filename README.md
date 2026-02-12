@@ -2,7 +2,6 @@
 
 **GitaGuide AI** is a spiritually modern, spiritually modern, and emotion-aware assistant grounded strictly in the wisdom of the **Bhagavad Gita**. It provides spiritual guidance, practical reflection, and gentle advice based on authentic scriptural verses.
 
-![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 ![Next.js](https://img.shields.io/badge/Frontend-Next.js%2015-black)
 ![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688)
 ![Groq](https://img.shields.io/badge/LLM-Llama%203.1%20(Groq)-orange)
