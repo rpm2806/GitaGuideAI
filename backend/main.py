@@ -75,6 +75,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+async def root():
+    return {
+        "message": "Welcome to GitaGuideAI API",
+        "docs": "/docs",
+        "health": "/health"
+    }
+
 # Pydantic Models
 class ChatRequest(BaseModel):
     message: str
