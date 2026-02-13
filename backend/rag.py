@@ -5,6 +5,9 @@ import asyncio
 import numpy as np
 from starlette.concurrency import run_in_threadpool
 import httpx
+from dotenv import load_dotenv
+
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +43,11 @@ class RAGPipeline:
                 
             return np.array(response.json())
 
-    async def ingest_data(self, json_path: str):
+    async def ingest_data(self, json_path: str, index_path: str = "data_cache"):
         """Loads data from JSON and fetches embeddings from HF Inference API."""
+        if self.load_index(index_path):
+            return
+
         if not os.path.exists(json_path):
             logger.warning(f"Data file not found at {json_path}. Skipping ingestion.")
             return
@@ -78,6 +84,39 @@ class RAGPipeline:
             logger.info("Ingestion complete via HF Inference API.")
         except Exception as e:
             logger.error(f"Error during ingestion: {e}")
+
+    def save_index(self, directory: str):
+        """Saves embeddings, documents, and metadatas to disk."""
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+            
+        np.save(os.path.join(directory, "embeddings.npy"), self.embeddings)
+        with open(os.path.join(directory, "documents.json"), "w", encoding="utf-8") as f:
+            json.dump(self.documents, f)
+        with open(os.path.join(directory, "metadatas.json"), "w", encoding="utf-8") as f:
+            json.dump(self.metadatas, f)
+            
+    def load_index(self, directory: str) -> bool:
+        """Loads index from disk. Returns True if successful."""
+        try:
+            emb_path = os.path.join(directory, "embeddings.npy")
+            doc_path = os.path.join(directory, "documents.json")
+            meta_path = os.path.join(directory, "metadatas.json")
+            
+            if not (os.path.exists(emb_path) and os.path.exists(doc_path) and os.path.exists(meta_path)):
+                return False
+                
+            self.embeddings = np.load(emb_path)
+            with open(doc_path, "r", encoding="utf-8") as f:
+                self.documents = json.load(f)
+            with open(meta_path, "r", encoding="utf-8") as f:
+                self.metadatas = json.load(f)
+                
+            logger.info("Loaded index from cache.")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to load index from cache: {e}")
+            return False
 
     async def search(self, query: str, limit: int = 5):
         try:

@@ -22,7 +22,7 @@ logger = logging.getLogger("api")
 
 # Load Environment Variables
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 if not GROQ_API_KEY:
@@ -48,7 +48,8 @@ async def lifespan(app: FastAPI):
     # Initialize RAG Pipeline
     rag = RAGPipeline()
     try:
-        await rag.ingest_data("./data/gita.json")
+        # Try to load from cache first
+        await rag.ingest_data(json_path="./data/gita.json", index_path="./data_cache")
     except Exception as e:
         logger.error(f"Failed to ingest data: {e}")
     

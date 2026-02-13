@@ -14,6 +14,8 @@ export const metadata: Metadata = {
   description: "Your spiritual companion for wisdom from the Bhagavad Gita. (Live v1)",
 };
 
+import { Analytics } from "@vercel/analytics/react";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -23,6 +25,7 @@ export default function RootLayout({
     <html lang="en" className="h-full overflow-hidden">
       <body className={`${inter.variable} h-full overflow-hidden`}>
         {children}
+        <Analytics />
       </body>
     </html>
   );
