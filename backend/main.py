@@ -34,7 +34,13 @@ if GROQ_API_KEY:
 else:
     logger.warning("GROQ_API_KEY is not set. LLM features will fail.")
 
-GROQ_MODEL = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
+DEPRECATED_MODELS = {"llama-3.1-8b-instant", "llama3-8b-8192", "llama-3-8b-8192", "llama-3.3-70b-versatile"}
+configured_model = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b").strip()
+if configured_model in DEPRECATED_MODELS:
+    logger.warning(f"Configured model '{configured_model}' is deprecated. Defaulting to 'qwen/qwen3.8-27b'.")
+    GROQ_MODEL = "qwen/qwen3.8-27b"
+else:
+    GROQ_MODEL = configured_model
 
 # Rate Limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -103,9 +109,9 @@ class ChatResponse(BaseModel):
     relevant_verses: List[dict]
     language: str
 
-# Helper: Call LLM
+# Helper: Call LLM with automatic failover
 async def call_llm(context: str, query: str, mood: str, language: str) -> str:
-    """Calls Groq API to generate response."""
+    """Calls Groq API to generate response with automatic fallback models."""
     if not GROQ_API_KEY:
         return "Using a placeholder response because GROQ_API_KEY is not set."
 
@@ -126,29 +132,39 @@ async def call_llm(context: str, query: str, mood: str, language: str) -> str:
     
     user_message = f"Context from Bhagavad Gita:\n{context}\n\nUser Question: {query}"
 
-    try:
-        response = await http_client.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
-            json={
-                "model": GROQ_MODEL,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message}
-                ],
-                "temperature": 0.7,
-                "max_tokens": 600
-            }
-        )
-        response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
-    except Exception as e:
-        logger.error(f"LLM Call failed: {e}")
-        return f"I am currently meditating on your question. Please try again. (Issue: {str(e)})"
+    candidates = [GROQ_MODEL, "qwen/qwen3.8-27b", "openai/gpt-oss-20b", "allam-2-7b"]
+    seen = set()
+    models_to_try = [m for m in candidates if not (m in seen or seen.add(m))]
+
+    last_error = None
+    for model_name in models_to_try:
+        try:
+            response = await http_client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+                json={
+                    "model": model_name,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_message}
+                    ],
+                    "temperature": 0.7,
+                    "max_tokens": 600
+                }
+            )
+            response.raise_for_status()
+            return response.json()["choices"][0]["message"]["content"]
+        except Exception as e:
+            last_error = e
+            logger.warning(f"Groq model {model_name} failed: {e}. Trying next candidate...")
+            continue
+
+    logger.error(f"All LLM Calls failed: {last_error}")
+    return f"I am currently meditating on your question. Please try again. (Issue: {str(last_error)})"
 
 from langdetect import detect, LangDetectException
 
-# Helper: Translate to English
+# Helper: Translate to English with automatic failover
 async def translate_to_english(text: str) -> str:
     """Translates text to English using Groq LLM."""
     if not GROQ_API_KEY:
@@ -156,28 +172,35 @@ async def translate_to_english(text: str) -> str:
 
     system_prompt = "You are a precise translator. Translate the user's text to English. Return ONLY the English translation, no acknowledgement."
     
-    try:
-        response = await http_client.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
-            json={
-                "model": GROQ_MODEL,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": text}
-                ],
-                "temperature": 0.1,
-                "max_tokens": 300
-            }
-        )
-        response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"].strip()
-    except Exception as e:
-        logger.error(f"Translation failed: {e}")
-        return text
+    candidates = [GROQ_MODEL, "qwen/qwen3.8-27b", "openai/gpt-oss-20b"]
+    seen = set()
+    models_to_try = [m for m in candidates if not (m in seen or seen.add(m))]
+
+    for model_name in models_to_try:
+        try:
+            response = await http_client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+                json={
+                    "model": model_name,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": text}
+                    ],
+                    "temperature": 0.1,
+                    "max_tokens": 300
+                }
+            )
+            response.raise_for_status()
+            return response.json()["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            logger.warning(f"Translation with {model_name} failed: {e}")
+            continue
+
+    return text
 
 @app.post("/chat", response_model=ChatResponse)
-@limiter.limit("15/minute")
+@limiter.limit("20/minute")
 async def chat_endpoint(request: Request, chat_req: ChatRequest):
     user_text = chat_req.message.strip()
     if not user_text:

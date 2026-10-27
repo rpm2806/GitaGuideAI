@@ -5,8 +5,13 @@ import asyncio
 import numpy as np
 from starlette.concurrency import run_in_threadpool
 import httpx
-from sklearn.feature_extraction.text import TfidfVectorizer
 from dotenv import load_dotenv
+
+try:
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    HAS_SKLEARN = True
+except ImportError:
+    HAS_SKLEARN = False
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
@@ -27,7 +32,7 @@ class RAGPipeline:
 
     def _build_tfidf(self):
         """Builds an in-memory TF-IDF index over the documents for instant, resilient retrieval."""
-        if self.documents:
+        if self.documents and HAS_SKLEARN:
             try:
                 self.vectorizer = TfidfVectorizer(stop_words="english", ngram_range=(1, 2))
                 self.tfidf_matrix = self.vectorizer.fit_transform(self.documents)
@@ -189,8 +194,8 @@ class RAGPipeline:
             except Exception as e:
                 logger.warning(f"Vector search failed, falling back to local search: {e}")
 
-        # 2. Resilient local search via TF-IDF
-        if self.vectorizer is not None and self.tfidf_matrix is not None:
+        # 2. Resilient local search via TF-IDF (if sklearn installed)
+        if HAS_SKLEARN and self.vectorizer is not None and self.tfidf_matrix is not None:
             try:
                 q_vec = self.vectorizer.transform([query])
                 scores = (self.tfidf_matrix * q_vec.T).toarray().flatten()
@@ -204,8 +209,20 @@ class RAGPipeline:
             except Exception as e:
                 logger.error(f"Local TF-IDF search failed: {e}")
 
-        # 3. Fallback: return first few verses if available
+        # 3. Pure Python keyword search fallback
         if self.documents:
-            return [{"content": self.documents[i], "metadata": self.metadatas[i]} for i in range(min(limit, len(self.documents)))]
+            query_words = set(query.lower().split())
+            scored = []
+            for idx, doc in enumerate(self.documents):
+                doc_words = set(doc.lower().split())
+                overlap = len(query_words.intersection(doc_words))
+                scored.append((overlap, idx))
+            scored.sort(reverse=True, key=lambda x: x[0])
+            for score, idx in scored[:limit]:
+                hits.append({
+                    "content": self.documents[idx],
+                    "metadata": self.metadatas[idx]
+                })
+            return hits
             
         return []
