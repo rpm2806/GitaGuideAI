@@ -9,10 +9,9 @@ from pydantic import BaseModel
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-import httpx # For Groq API calls
+import httpx
 
-# Import local modules
-# Assuming these are in the python path or same directory
+# Local modules
 from safety import SafetyLayer
 from rag import RAGPipeline
 
@@ -20,13 +19,22 @@ from rag import RAGPipeline
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("api")
 
+# Base directory paths
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_PATH = os.path.join(BASE_DIR, "data", "gita.json")
+CACHE_PATH = os.path.join(BASE_DIR, "data_cache")
+
 # Load Environment Variables
 from dotenv import load_dotenv
-load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-if not GROQ_API_KEY:
+if GROQ_API_KEY:
+    GROQ_API_KEY = GROQ_API_KEY.strip()
+else:
     logger.warning("GROQ_API_KEY is not set. LLM features will fail.")
+
+GROQ_MODEL = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
 
 # Rate Limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -40,7 +48,7 @@ http_client: Optional[httpx.AsyncClient] = None
 async def lifespan(app: FastAPI):
     global rag, safety, http_client
 
-    logger.info("Starting up...")
+    logger.info("Starting up GitaGuide AI backend...")
     
     # Initialize Safety Layer
     safety = SafetyLayer()
@@ -48,8 +56,7 @@ async def lifespan(app: FastAPI):
     # Initialize RAG Pipeline
     rag = RAGPipeline()
     try:
-        # Try to load from cache first
-        await rag.ingest_data(json_path="./data/gita.json", index_path="./data_cache")
+        await rag.ingest_data(json_path=DATA_PATH, index_path=CACHE_PATH)
     except Exception as e:
         logger.error(f"Failed to ingest data: {e}")
     
@@ -58,7 +65,7 @@ async def lifespan(app: FastAPI):
     
     yield
     
-    logger.info("Shutting down...")
+    logger.info("Shutting down GitaGuide AI backend...")
     if http_client:
         await http_client.aclose()
 
@@ -81,7 +88,8 @@ async def root():
     return {
         "message": "Welcome to GitaGuideAI API",
         "docs": "/docs",
-        "health": "/health"
+        "health": "/health",
+        "model": GROQ_MODEL
     }
 
 # Pydantic Models
@@ -105,10 +113,10 @@ async def call_llm(context: str, query: str, mood: str, language: str) -> str:
         "You are GitaGuide AI, a warm spiritual companion grounded in the Bhagavad Gita.\n"
         "IMPORTANT FORMATTING RULES:\n"
         "1. Give ONLY your guidance, explanation, and practical advice in your response.\n"
-        "2. Do NOT include verse text, Sanskrit shlokas, or transliterations in your reply — these are shown separately in the UI.\n"
-        "3. You may briefly mention a verse reference like 'Chapter 2, Verse 47' for context, but do NOT quote the verse.\n"
-        "4. Keep your reply concise, warm, and conversational — like a wise friend, not a textbook.\n"
-        "5. Structure: Brief insight → Practical reflection → Gentle encouragement.\n"
+        "2. Do NOT include verse text, Sanskrit shlokas, or transliterations in your reply -- these are shown separately in the UI.\n"
+        "3. You may briefly mention a verse reference like 'Chapter 2, Verse 47' for context, but do NOT quote the full verse.\n"
+        "4. Keep your reply concise, warm, and conversational -- like a wise friend, not a textbook.\n"
+        "5. Structure: Brief insight -> Practical reflection -> Gentle encouragement.\n"
         f"6. Adapt tone based on user mood: {mood or 'neutral'}.\n"
         "7. If the question is outside scope, say: 'The Bhagavad Gita does not directly address this.'\n"
         "8. Do not provide medical, legal, or financial advice.\n"
@@ -116,20 +124,20 @@ async def call_llm(context: str, query: str, mood: str, language: str) -> str:
         f"10. Respond fully in: {language}.\n"
     )
     
-    user_message = f"Context:\n{context}\n\nUser Question: {query}"
+    user_message = f"Context from Bhagavad Gita:\n{context}\n\nUser Question: {query}"
 
     try:
         response = await http_client.post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
             json={
-                "model": "llama-3.1-8b-instant", # Updated Free tier model
+                "model": GROQ_MODEL,
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message}
                 ],
                 "temperature": 0.7,
-                "max_tokens": 500
+                "max_tokens": 600
             }
         )
         response.raise_for_status()
@@ -139,7 +147,6 @@ async def call_llm(context: str, query: str, mood: str, language: str) -> str:
         return f"I am currently meditating on your question. Please try again. (Issue: {str(e)})"
 
 from langdetect import detect, LangDetectException
-
 
 # Helper: Translate to English
 async def translate_to_english(text: str) -> str:
@@ -154,12 +161,13 @@ async def translate_to_english(text: str) -> str:
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
             json={
-                "model": "llama-3.1-8b-instant",
+                "model": GROQ_MODEL,
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": text}
                 ],
-                "temperature": 0.1
+                "temperature": 0.1,
+                "max_tokens": 300
             }
         )
         response.raise_for_status()
@@ -169,9 +177,15 @@ async def translate_to_english(text: str) -> str:
         return text
 
 @app.post("/chat", response_model=ChatResponse)
-@limiter.limit("5/minute")
+@limiter.limit("15/minute")
 async def chat_endpoint(request: Request, chat_req: ChatRequest):
-    user_text = chat_req.message
+    user_text = chat_req.message.strip()
+    if not user_text:
+        return ChatResponse(
+            response="Please share what is on your mind or in your heart.",
+            relevant_verses=[],
+            language=chat_req.language
+        )
     
     # 0. Language Detection
     detected_lang = "en"
@@ -199,12 +213,11 @@ async def chat_endpoint(request: Request, chat_req: ChatRequest):
     cleaned_query = safety.sanitize(english_text)
     retrieved_docs = await rag.search(cleaned_query, limit=3)
     
-    context_text = "\n".join([d['content'] for d in retrieved_docs])
+    context_text = "\n\n".join([f"Verse {d['metadata']['chapter']}.{d['metadata']['verse']}: {d['content']}" for d in retrieved_docs])
     verses_metadata = [d['metadata'] for d in retrieved_docs]
     
     # 4. LLM Generation
-    # We pass the Original User Text + English Translation to give full context
-    combined_query = f"Original ({detected_lang}): {user_text}\nEnglish Translation: {english_text}"
+    combined_query = f"Original Query ({detected_lang}): {user_text}\nUnderstood Meaning: {english_text}"
     
     ai_response = await call_llm(
         context=context_text, 
@@ -221,4 +234,8 @@ async def chat_endpoint(request: Request, chat_req: ChatRequest):
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "verses_loaded": len(rag.documents) if rag else 0,
+        "model": GROQ_MODEL
+    }
